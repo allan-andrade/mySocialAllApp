@@ -1,0 +1,14 @@
+{
+  "extends": "@social-publisher/config/tsconfig/nestjs.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": "./",
+    // Keeps the incremental cache inside `dist`, so `nest build`'s `deleteOutDir`
+    // wipes it together with the output. Otherwise a stale cache outside `dist`
+    // can convince tsc nothing changed and it skips emitting any file at all.
+    "tsBuildInfoFile": "./dist/.tsbuildinfo"
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "test"]
+}

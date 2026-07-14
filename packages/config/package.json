@@ -1,0 +1,9 @@
+{
+  "name": "@social-publisher/config",
+  "version": "0.1.0",
+  "private": true,
+  "files": [
+    "tsconfig",
+    "tailwind-preset.cjs"
+  ]
+}

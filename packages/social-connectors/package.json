@@ -1,0 +1,26 @@
+{
+  "name": "@social-publisher/social-connectors",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "module": "./src/index.ts",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@social-publisher/shared": "workspace:*",
+    "twitter-text": "^3.1.0"
+  },
+  "devDependencies": {
+    "@social-publisher/config": "workspace:*",
+    "@types/twitter-text": "^3.1.10",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

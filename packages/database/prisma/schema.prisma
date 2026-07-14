@@ -1,0 +1,307 @@
+// Fase 2: schema de domínio completo. Autenticação (User, Session) veio da Fase 1;
+// aqui entram conexões sociais, mídia, rascunhos, publicações, destinos e tentativas.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Autenticação ─────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  imageUrl     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions          Session[]
+  socialConnections SocialConnection[]
+  mediaAssets       MediaAsset[]
+  drafts            Draft[]
+  publications      Publication[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // SHA-256 hash of the opaque token stored in the session cookie; the raw token
+  // never touches the database, so a DB leak alone can't be replayed as a session.
+  tokenHash String   @unique
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ── Provedores e conexões ────────────────────────────────────────────────
+
+// MVP: instagram, threads, x, facebook_page. Os demais já existem no enum para
+// que adicionar um provedor novo não exija migration de banco.
+enum SocialProvider {
+  instagram
+  threads
+  x
+  facebook_page
+  linkedin
+  tiktok
+  bluesky
+  pinterest
+  youtube_community
+  mastodon
+
+  @@map("social_provider")
+}
+
+enum SocialConnectionStatus {
+  CONNECTED
+  EXPIRED
+  REVOKED
+  ERROR
+  DISCONNECTED
+
+  @@map("social_connection_status")
+}
+
+model SocialConnection {
+  id                    String                 @id @default(uuid())
+  userId                String
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider              SocialProvider
+  externalAccountId     String
+  externalAccountName   String
+  username              String
+  avatarUrl             String?
+  accountType           String?
+  // Cifrados com AES-256-GCM via @social-publisher/crypto; nunca em texto puro.
+  encryptedAccessToken  String
+  encryptedRefreshToken String?
+  tokenExpiresAt        DateTime?
+  scopes                String[]
+  status                SocialConnectionStatus @default(CONNECTED)
+  capabilities          Json?
+  metadata              Json?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  disconnectedAt        DateTime?
+
+  facebookPages      FacebookPageConnection[]
+  publicationTargets PublicationTarget[]
+
+  @@unique([userId, provider, externalAccountId])
+  @@index([userId])
+  @@map("social_connections")
+}
+
+enum FacebookPageConnectionStatus {
+  ACTIVE
+  DISABLED
+
+  @@map("facebook_page_connection_status")
+}
+
+model FacebookPageConnection {
+  id                       String                       @id @default(uuid())
+  socialConnectionId       String
+  socialConnection         SocialConnection             @relation(fields: [socialConnectionId], references: [id], onDelete: Cascade)
+  pageId                   String
+  pageName                 String
+  pageAvatarUrl            String?
+  encryptedPageAccessToken String?
+  status                   FacebookPageConnectionStatus @default(ACTIVE)
+  createdAt                DateTime                     @default(now())
+  updatedAt                DateTime                     @updatedAt
+
+  publicationTargets PublicationTarget[]
+
+  @@unique([socialConnectionId, pageId])
+  @@map("facebook_page_connections")
+}
+
+// ── Mídia ────────────────────────────────────────────────────────────────
+
+enum MediaProcessingStatus {
+  PENDING_UPLOAD
+  UPLOADED
+  PROCESSING
+  READY
+  FAILED
+
+  @@map("media_processing_status")
+}
+
+model MediaAsset {
+  id               String                @id @default(uuid())
+  userId           String
+  user             User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storageKey       String                @unique
+  originalFilename String
+  mimeType         String
+  sizeBytes        Int
+  width            Int?
+  height           Int?
+  durationSeconds  Float?
+  checksum         String?
+  processingStatus MediaProcessingStatus @default(PENDING_UPLOAD)
+  createdAt        DateTime              @default(now())
+
+  publicationMedia PublicationMedia[]
+
+  @@index([userId])
+  @@map("media_assets")
+}
+
+// ── Rascunhos ────────────────────────────────────────────────────────────
+
+model Draft {
+  id                String           @id @default(uuid())
+  userId            String
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  text              String           @default("")
+  selectedProviders SocialProvider[]
+  // Mapa provider -> { text } com o texto personalizado por plataforma.
+  providerOverrides Json?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  publications Publication[]
+
+  @@index([userId, updatedAt])
+  @@map("drafts")
+}
+
+// ── Publicações ──────────────────────────────────────────────────────────
+
+enum PublicationStatus {
+  DRAFT
+  QUEUED
+  PROCESSING
+  PARTIALLY_PUBLISHED
+  PUBLISHED
+  FAILED
+  CANCELLED
+
+  @@map("publication_status")
+}
+
+model Publication {
+  id             String            @id @default(uuid())
+  userId         String
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  draftId        String?
+  draft          Draft?            @relation(fields: [draftId], references: [id], onDelete: SetNull)
+  baseText       String            @default("")
+  status         PublicationStatus @default(QUEUED)
+  idempotencyKey String
+  // Preparação para agendamento (seção 23): datas em UTC, timezone preservada.
+  scheduledFor   DateTime?
+  timezone       String?
+  createdAt      DateTime          @default(now())
+  publishedAt    DateTime?
+  updatedAt      DateTime          @updatedAt
+
+  media   PublicationMedia[]
+  targets PublicationTarget[]
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("publications")
+}
+
+model PublicationMedia {
+  publicationId String
+  publication   Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  mediaAssetId  String
+  mediaAsset    MediaAsset  @relation(fields: [mediaAssetId], references: [id], onDelete: Restrict)
+  position      Int
+  altText       String?
+
+  @@id([publicationId, position])
+  @@unique([publicationId, mediaAssetId])
+  @@map("publication_media")
+}
+
+enum PublicationTargetStatus {
+  PENDING
+  VALIDATING
+  UPLOADING_MEDIA
+  CREATING_CONTAINER
+  WAITING_PROCESSING
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  RETRY_SCHEDULED
+  CANCELLED
+
+  @@map("publication_target_status")
+}
+
+model PublicationTarget {
+  id                       String                  @id @default(uuid())
+  publicationId            String
+  publication              Publication             @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  socialConnectionId       String
+  socialConnection         SocialConnection        @relation(fields: [socialConnectionId], references: [id], onDelete: Restrict)
+  facebookPageConnectionId String?
+  facebookPageConnection   FacebookPageConnection? @relation(fields: [facebookPageConnectionId], references: [id], onDelete: Restrict)
+  provider                 SocialProvider
+  customText               String?
+  status                   PublicationTargetStatus @default(PENDING)
+  attemptCount             Int                     @default(0)
+  // Compõe a chave de idempotência do destino: publicationId + socialConnectionId + revision.
+  revision                 Int                     @default(0)
+  externalPublicationId    String?
+  externalUrl              String?
+  lastErrorCode            String?
+  lastErrorMessage         String?
+  retryable                Boolean                 @default(false)
+  publishedAt              DateTime?
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+
+  attempts PublicationAttempt[]
+
+  @@unique([publicationId, socialConnectionId, revision])
+  @@index([publicationId])
+  @@index([socialConnectionId])
+  @@map("publication_targets")
+}
+
+enum PublicationAttemptStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+
+  @@map("publication_attempt_status")
+}
+
+model PublicationAttempt {
+  id                     String                   @id @default(uuid())
+  publicationTargetId    String
+  publicationTarget      PublicationTarget        @relation(fields: [publicationTargetId], references: [id], onDelete: Cascade)
+  attemptNumber          Int
+  startedAt              DateTime                 @default(now())
+  completedAt            DateTime?
+  status                 PublicationAttemptStatus @default(RUNNING)
+  providerHttpStatus     Int?
+  normalizedErrorCode    String?
+  normalizedErrorMessage String?
+  // Resposta externa já sanitizada (sem tokens/segredos) para auditoria.
+  sanitizedResponse      Json?
+  requestCorrelationId   String?
+
+  @@unique([publicationTargetId, attemptNumber])
+  @@map("publication_attempts")
+}

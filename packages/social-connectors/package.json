@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@social-publisher/config": "workspace:*",
+    "@types/node": "^22.10.2",
     "@types/twitter-text": "^3.1.10",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

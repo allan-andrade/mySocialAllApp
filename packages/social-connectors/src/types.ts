@@ -13,6 +13,19 @@ export interface SocialConnection {
   externalAccountId: string;
   accountType?: string;
   status: SocialConnectionStatus;
+  /**
+   * Token de acesso JÁ descriptografado, fornecido pelo chamador (API/worker) no
+   * momento da chamada. Nunca é persistido nesta forma — em repouso os tokens
+   * vivem cifrados no banco (AES-256-GCM).
+   */
+  accessToken?: string;
+  refreshToken?: string;
+  /** Destino filho quando aplicável (Facebook: Página administrada + page token). */
+  page?: {
+    pageId: string;
+    pageName?: string;
+    accessToken?: string;
+  };
 }
 
 export interface AuthorizationInput {
@@ -106,6 +119,11 @@ export interface ProviderPage {
   pageId: string;
   pageName: string;
   pageAvatarUrl?: string;
+  /**
+   * Page access token retornado pelo provedor. O consumidor (API) deve cifrá-lo
+   * antes de persistir e NUNCA expô-lo em respostas HTTP.
+   */
+  pageAccessToken?: string;
 }
 
 /**

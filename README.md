@@ -5,14 +5,14 @@ várias redes sociais conectadas (Instagram, Threads, X e Páginas do
 Facebook no MVP). Monorepo pnpm + Turborepo, TypeScript estrito de ponta a
 ponta, sem scraping ou automação de navegador — só APIs oficiais.
 
-**Status**: Fases 1 (Fundação), 2 (Domínio), 3 (Interface) e 4 (Pipeline)
-concluídas. O fluxo completo funciona em modo mock: compor → publicar →
-um job BullMQ por plataforma → worker com retries (backoff exponencial +
-jitter, sem retry para erros definitivos, DLQ) → resultado parcial de
-primeira classe → histórico com status ao vivo e retry isolado por
-plataforma. Idempotência em dois níveis (requisição e destino). Restam as
-Fases 5 (conectores reais Threads/Instagram/Facebook/X, exigem credenciais)
-e 6 (observabilidade completa, E2E Playwright) — ver
+**Status**: Fases 1–4 concluídas e verificadas em modo mock (fluxo completo:
+compor → fila por plataforma → worker com retries/DLQ → resultado parcial →
+histórico com retry isolado). **Fase 5 implementada**: conectores reais de
+Threads, Instagram, Facebook Pages e X (`packages/social-connectors/src/live/`),
+registrados por credencial em `SOCIAL_CONNECTOR_MODE=live` — porém **ainda não
+exercitados contra as APIs reais** (exigem apps criados nos portais e revisão
+de permissões; ver [docs/oauth.md](./docs/oauth.md)). Resta a Fase 6
+(observabilidade completa, E2E Playwright) — ver
 [docs/architecture.md](./docs/architecture.md) e
 [docs/connectors.md](./docs/connectors.md).
 

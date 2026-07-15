@@ -134,6 +134,8 @@ export class SocialConnectionsService {
       provider,
       externalAccountId: 'pending',
       status: 'CONNECTED',
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
     };
     const profile = await connector.getProfile(probe);
     const capabilities = await connector.getCapabilities(probe);
@@ -235,7 +237,55 @@ export class SocialConnectionsService {
     });
   }
 
-  async listProviderPages(userId: string, connectionId: string): Promise<ProviderPage[]> {
+  /** Versão pública (HTTP): NUNCA inclui o page access token na resposta. */
+  async listProviderPages(
+    userId: string,
+    connectionId: string,
+  ): Promise<Array<Omit<ProviderPage, 'pageAccessToken'>>> {
+    const pages = await this.fetchProviderPages(userId, connectionId);
+    return pages.map(({ pageId, pageName, pageAvatarUrl }) => ({
+      pageId,
+      pageName,
+      pageAvatarUrl,
+    }));
+  }
+
+  async connectPage(userId: string, connectionId: string, pageId: string) {
+    const connection = await this.requireOwned(userId, connectionId);
+    const pages = await this.fetchProviderPages(userId, connectionId);
+    const page = pages.find((p) => p.pageId === pageId);
+    if (!page) {
+      throw new AppError(ErrorCode.NOT_FOUND, 'Página não encontrada nesta conta.', 404);
+    }
+
+    // O page token é cifrado em repouso e usado apenas pelo worker na publicação.
+    const encryptedPageAccessToken = page.pageAccessToken
+      ? this.cipher.encrypt(page.pageAccessToken)
+      : null;
+
+    const saved = await this.prisma.facebookPageConnection.upsert({
+      where: { socialConnectionId_pageId: { socialConnectionId: connection.id, pageId } },
+      create: {
+        socialConnectionId: connection.id,
+        pageId: page.pageId,
+        pageName: page.pageName,
+        pageAvatarUrl: page.pageAvatarUrl ?? null,
+        encryptedPageAccessToken,
+        status: 'ACTIVE',
+      },
+      update: {
+        pageName: page.pageName,
+        pageAvatarUrl: page.pageAvatarUrl ?? null,
+        encryptedPageAccessToken,
+        status: 'ACTIVE',
+      },
+    });
+    // Nunca devolver o token (nem cifrado) na resposta HTTP.
+    const { encryptedPageAccessToken: _omitted, ...safe } = saved;
+    return safe;
+  }
+
+  private async fetchProviderPages(userId: string, connectionId: string): Promise<ProviderPage[]> {
     const connection = await this.requireOwned(userId, connectionId);
     const connector = this.registry.get(connection.provider as SocialProvider);
     if (!connector.listPages) {
@@ -254,27 +304,6 @@ export class SocialConnectionsService {
       );
     }
     return pages;
-  }
-
-  async connectPage(userId: string, connectionId: string, pageId: string) {
-    const connection = await this.requireOwned(userId, connectionId);
-    const pages = await this.listProviderPages(userId, connectionId);
-    const page = pages.find((p) => p.pageId === pageId);
-    if (!page) {
-      throw new AppError(ErrorCode.NOT_FOUND, 'Página não encontrada nesta conta.', 404);
-    }
-
-    return this.prisma.facebookPageConnection.upsert({
-      where: { socialConnectionId_pageId: { socialConnectionId: connection.id, pageId } },
-      create: {
-        socialConnectionId: connection.id,
-        pageId: page.pageId,
-        pageName: page.pageName,
-        pageAvatarUrl: page.pageAvatarUrl ?? null,
-        status: 'ACTIVE',
-      },
-      update: { pageName: page.pageName, pageAvatarUrl: page.pageAvatarUrl ?? null, status: 'ACTIVE' },
-    });
   }
 
   async disconnectPage(userId: string, pageConnectionId: string): Promise<void> {
@@ -312,6 +341,13 @@ export class SocialConnectionsService {
       externalAccountId: connection.externalAccountId,
       accountType: connection.accountType ?? undefined,
       status: connection.status as ConnectorConnection['status'],
+      // Descriptografado apenas no momento da chamada ao conector; nunca logado.
+      accessToken: connection.encryptedAccessToken
+        ? this.cipher.decrypt(connection.encryptedAccessToken)
+        : undefined,
+      refreshToken: connection.encryptedRefreshToken
+        ? this.cipher.decrypt(connection.encryptedRefreshToken)
+        : undefined,
     };
   }
 }

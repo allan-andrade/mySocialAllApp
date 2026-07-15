@@ -139,6 +139,9 @@ describe('Social connections — fluxo OAuth mock completo (e2e)', () => {
     });
     expect(pages.statusCode).toBe(200);
     expect(pages.json()).toHaveLength(2);
+    // O page access token NUNCA aparece na listagem HTTP.
+    expect(pages.body).not.toContain('mock-page-token');
+    expect(pages.body).not.toContain('pageAccessToken');
 
     const connect = await app.inject({
       method: 'POST',
@@ -147,6 +150,16 @@ describe('Social connections — fluxo OAuth mock completo (e2e)', () => {
     });
     expect(connect.statusCode).toBe(201);
     expect(connect.json().pageName).toBe('Página Mock Principal');
+    expect(connect.body).not.toContain('mock-page-token');
+    expect(connect.body).not.toContain('encryptedPageAccessToken');
+
+    // No banco, o page token fica cifrado (AES-256-GCM, payload v1.*), nunca em claro.
+    const stored = await prisma.facebookPageConnection.findFirst({
+      where: { socialConnectionId: fbConnection.id, pageId: 'mock-fb-page-1' },
+    });
+    expect(stored!.encryptedPageAccessToken).not.toBeNull();
+    expect(stored!.encryptedPageAccessToken!.startsWith('v1.')).toBe(true);
+    expect(stored!.encryptedPageAccessToken).not.toContain('mock-page-token');
   });
 
   it('isolamento entre usuários: conexão de A não é visível nem operável por B', async () => {

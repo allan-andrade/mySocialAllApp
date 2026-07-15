@@ -1,0 +1,14 @@
+{
+  "name": "@social-publisher/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@types/node": "^22.10.2"
+  }
+}

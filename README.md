@@ -5,16 +5,18 @@ várias redes sociais conectadas (Instagram, Threads, X e Páginas do
 Facebook no MVP). Monorepo pnpm + Turborepo, TypeScript estrito de ponta a
 ponta, sem scraping ou automação de navegador — só APIs oficiais.
 
-**Status**: Fases 1–4 concluídas e verificadas em modo mock (fluxo completo:
-compor → fila por plataforma → worker com retries/DLQ → resultado parcial →
-histórico com retry isolado). **Fase 5 implementada**: conectores reais de
-Threads, Instagram, Facebook Pages e X (`packages/social-connectors/src/live/`),
-registrados por credencial em `SOCIAL_CONNECTOR_MODE=live` — porém **ainda não
-exercitados contra as APIs reais** (exigem apps criados nos portais e revisão
-de permissões; ver [docs/oauth.md](./docs/oauth.md)). Resta a Fase 6
-(observabilidade completa, E2E Playwright) — ver
-[docs/architecture.md](./docs/architecture.md) e
-[docs/connectors.md](./docs/connectors.md).
+**Status**: todas as 6 fases do plano concluídas. Fluxo completo verificado em
+modo mock (compor → fila por plataforma → worker com retries/DLQ → resultado
+parcial → histórico com retry isolado), conectores reais de Threads, Instagram,
+Facebook Pages e X implementados e registrados por credencial em
+`SOCIAL_CONNECTOR_MODE=live` — porém **ainda não exercitados contra as APIs
+reais** (exigem apps criados nos portais e revisão de permissões; ver
+[docs/oauth.md](./docs/oauth.md)). Observabilidade com `/metrics` Prometheus e
+correlation ID, E2E com Playwright e revisão de segurança documentada — ver
+[docs/architecture.md](./docs/architecture.md),
+[docs/connectors.md](./docs/connectors.md),
+[docs/observability.md](./docs/observability.md) e
+[docs/security.md](./docs/security.md).
 
 ## Stack
 
@@ -71,7 +73,8 @@ Executados a partir da raiz, orquestrados pelo Turborepo:
 | `pnpm build` | Builda todos os packages e apps, respeitando dependências |
 | `pnpm lint` | ESLint em todo o monorepo |
 | `pnpm typecheck` | `tsc --noEmit` em todo o monorepo |
-| `pnpm test` | Vitest em todo o monorepo (unit + e2e da API) |
+| `pnpm test` | Vitest em todo o monorepo (unit + integração de API/worker) |
+| `pnpm test:e2e` | Playwright contra o ambiente local (requer `pnpm dev` + docker no ar; 1ª vez: `pnpm --filter @social-publisher/e2e exec playwright install chromium`) |
 | `pnpm db:migrate` | `prisma migrate dev` em `packages/database` |
 | `pnpm db:studio` | Abre o Prisma Studio |
 

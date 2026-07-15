@@ -130,8 +130,4 @@ export class MetricsService {
   async render(): Promise<string> {
     return this.registry.metrics();
   }
-
-  get contentType(): string {
-    return this.registry.contentType;
-  }
 }

@@ -10,6 +10,14 @@ export const envSchema = z.object({
   SESSION_SECRET: z.string().min(16),
   TOKEN_ENCRYPTION_KEY: z.string().min(1),
   SOCIAL_CONNECTOR_MODE: z.enum(['mock', 'live']).default('mock'),
+  // Credenciais dos provedores — exigidas somente em modo live; a ausência de
+  // uma delas desabilita apenas o conector correspondente (nunca cai para mock).
+  META_APP_ID: z.string().optional(),
+  META_APP_SECRET: z.string().optional(),
+  THREADS_APP_ID: z.string().optional(),
+  THREADS_APP_SECRET: z.string().optional(),
+  X_CLIENT_ID: z.string().optional(),
+  X_CLIENT_SECRET: z.string().optional(),
   S3_ENDPOINT: z.string().url(),
   S3_REGION: z.string().min(1),
   S3_BUCKET: z.string().min(1),

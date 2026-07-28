@@ -82,6 +82,10 @@ export class PublicationsService {
       where: { userId_idempotencyKey: { userId, idempotencyKey: input.idempotencyKey } },
     });
     if (existing) {
+      // Replay idempotente: re-enfileira destinos ainda PENDING. Fecha a lacuna em
+      // que o enqueue inicial falhou (ex.: Redis indisponível) e deixou destinos
+      // presos. Como o jobId é determinístico, isto é no-op quando o job já existe.
+      await this.enqueuePendingTargets(existing.id);
       return { publication: await this.get(userId, existing.id), reused: true };
     }
 
@@ -326,17 +330,15 @@ export class PublicationsService {
 
   async cancelTarget(userId: string, targetId: string) {
     const target = await this.requireOwnedTarget(userId, targetId);
-    if (target.status !== 'PENDING' && target.status !== 'RETRY_SCHEDULED') {
-      throw new AppError(
-        ErrorCode.CONFLICT,
-        'Este destino não pode mais ser cancelado.',
-        409,
-      );
-    }
-    await this.prisma.publicationTarget.update({
-      where: { id: target.id },
+    // Update condicional: se o worker reivindicou o destino (PENDING → VALIDATING)
+    // entre a leitura e aqui, o cancelamento não pisa por cima do processamento.
+    const cancelled = await this.prisma.publicationTarget.updateMany({
+      where: { id: target.id, status: { in: ['PENDING', 'RETRY_SCHEDULED'] } },
       data: { status: 'CANCELLED' },
     });
+    if (cancelled.count === 0) {
+      throw new AppError(ErrorCode.CONFLICT, 'Este destino não pode mais ser cancelado.', 409);
+    }
     return { success: true };
   }
 

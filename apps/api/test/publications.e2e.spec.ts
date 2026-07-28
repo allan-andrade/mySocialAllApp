@@ -176,6 +176,63 @@ describe('Publications API (e2e)', () => {
     expect(cancelAgain.statusCode).toBe(409);
   });
 
+  it('não cancela um destino já reivindicado pelo worker (update condicional)', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/publications',
+      headers: { cookie },
+      payload: createPayload(),
+    });
+    const targetId = created.json().targets[0].id;
+    // Simula o worker tendo saído de PENDING (mutex de status).
+    await prisma.publicationTarget.update({
+      where: { id: targetId },
+      data: { status: 'PUBLISHING' },
+    });
+
+    const cancel = await app.inject({
+      method: 'POST',
+      url: `/api/v1/publication-targets/${targetId}/cancel`,
+      headers: { cookie },
+    });
+    expect(cancel.statusCode).toBe(409);
+
+    // O status do worker permanece intocado — o cancel não pisou por cima.
+    const target = await prisma.publicationTarget.findUniqueOrThrow({ where: { id: targetId } });
+    expect(target.status).toBe('PUBLISHING');
+  });
+
+  it('replay idempotente re-enfileira destinos ainda PENDING', async () => {
+    const payload = createPayload();
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/v1/publications',
+      headers: { cookie },
+      payload,
+    });
+    const targetId = first.json().targets[0].id;
+    const target = await prisma.publicationTarget.findUniqueOrThrow({ where: { id: targetId } });
+
+    // Simula o job perdido (enqueue inicial falhou): remove-o da fila pausada.
+    const jobId = publicationTargetJobId(
+      target.publicationId,
+      target.socialConnectionId,
+      target.revision,
+    );
+    await (await queue.getJob(jobId))?.remove();
+    expect(await queue.getJob(jobId)).toBeUndefined();
+
+    // Repetir a requisição (mesma idempotencyKey) recria o job sem duplicar a publicação.
+    const replay = await app.inject({
+      method: 'POST',
+      url: '/api/v1/publications',
+      headers: { cookie },
+      payload,
+    });
+    expect(replay.statusCode).toBe(200);
+    expect(await queue.getJob(jobId)).toBeDefined();
+  });
+
   it('retry de destino FAILED reenfileira e marca PENDING', async () => {
     const created = await app.inject({
       method: 'POST',

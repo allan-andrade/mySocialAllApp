@@ -16,6 +16,7 @@ export async function createTestApp(): Promise<NestFastifyApplication> {
     exclude: [
       { path: 'health', method: RequestMethod.GET },
       { path: 'ready', method: RequestMethod.GET },
+      { path: 'metrics', method: RequestMethod.GET },
     ],
   });
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });

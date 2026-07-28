@@ -40,8 +40,33 @@ genéricos — tudo fica encapsulado dentro do conector correspondente.
   provedor sem implementação real falha explicitamente; nunca há fallback
   silencioso para mock.
 
-As implementações reais (`InstagramConnector`, `ThreadsConnector`, `XConnector`,
-`FacebookPageConnector`) entram na Fase 5 e serão registradas no mesmo registry.
+**Status na Fase 5**: os quatro conectores reais existem em `src/live/`:
+
+| Conector | API | Publicação |
+| --- | --- | --- |
+| `ThreadsConnector` | graph.threads.net | container TEXT/IMAGE/VIDEO/CAROUSEL → polling de status → `threads_publish` → permalink |
+| `InstagramConnector` | Instagram Graph API (via Facebook Login) | resolve a conta profissional por `/me/accounts`; container em `/{ig}/media` (Reels para vídeo, CAROUSEL para 2+) → `status_code` → `media_publish` |
+| `FacebookPageConnector` | Graph API | `listPages` com page tokens; texto em `/feed`, foto em `/photos`, multi-foto via `attached_media`, vídeo em `/videos` — sempre com o token da Página |
+| `XConnector` | X API v2 | OAuth 2.0 + PKCE (S256), upload de mídia em chunks (INIT/APPEND/FINALIZE + STATUS) ANTES do post, `POST /2/tweets`, refresh e revoke |
+
+Pontos em comum: tokens sempre em header `Authorization` (nunca em URL),
+erros normalizados pelos códigos internos com retryability correta
+(429/5xx/timeout → temporário; 4xx → definitivo), mensagens com
+`access_token`/`client_secret`/`Bearer` **redigidos** antes de qualquer log,
+e OAuth da Meta compartilhado em `meta-oauth.ts` (short-lived →
+`fb_exchange_token` long-lived).
+
+Em modo live, `liveConfigFromEnv` registra apenas os conectores cujas
+credenciais existem no ambiente (`META_APP_ID/SECRET`,
+`THREADS_APP_ID/SECRET`, `X_CLIENT_ID[/SECRET]`); os demais permanecem
+desabilitados com erro explícito.
+
+> ⚠️ **Não validado contra as APIs reais**: os conectores foram implementados
+> a partir da documentação oficial e testados com HTTP mockado (endpoints,
+> parâmetros, ordem do fluxo de container, classificação de erros). O
+> exercício com credenciais reais — incluindo App Review da Meta e nível de
+> acesso do X — ainda precisa ser feito antes de considerar as integrações
+> funcionais em produção (ver [oauth.md](./oauth.md)).
 
 ## Modo mock vs. live
 

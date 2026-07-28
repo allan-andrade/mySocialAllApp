@@ -1,5 +1,8 @@
 import 'reflect-metadata';
 
+import { randomUUID } from 'node:crypto';
+import type { IncomingMessage } from 'node:http';
+
 import fastifyCookie from '@fastify/cookie';
 import fastifyCors from '@fastify/cors';
 import fastifyHelmet from '@fastify/helmet';
@@ -11,12 +14,22 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
+const REQUEST_ID_HEADER = 'x-request-id';
+const REQUEST_ID_PATTERN = /^[A-Za-z0-9._-]{1,128}$/;
+
 async function bootstrap(): Promise<void> {
   const appUrl = process.env['APP_URL'] ?? 'http://localhost:3000';
   const port = Number(process.env['API_PORT'] ?? 4000);
 
   const adapter = new FastifyAdapter({
     trustProxy: true,
+    // Correlation ID: aceita o x-request-id do chamador (se bem-formado) ou gera
+    // um novo. O Pino inclui req.id em todas as linhas de log da requisição.
+    genReqId: (req: IncomingMessage) => {
+      const incoming = req.headers[REQUEST_ID_HEADER];
+      const value = Array.isArray(incoming) ? incoming[0] : incoming;
+      return value && REQUEST_ID_PATTERN.test(value) ? value : randomUUID();
+    },
     logger: {
       level: process.env['NODE_ENV'] === 'production' ? 'info' : 'debug',
       redact: ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'],
@@ -31,10 +44,17 @@ async function bootstrap(): Promise<void> {
   await app.register(fastifyCors, { origin: [appUrl], credentials: true });
   await app.register(fastifyCookie);
 
+  // Propaga o correlation ID na resposta para rastreio ponta a ponta.
+  app.getHttpAdapter().getInstance().addHook('onRequest', (request, reply, done) => {
+    reply.header(REQUEST_ID_HEADER, request.id);
+    done();
+  });
+
   app.setGlobalPrefix('api', {
     exclude: [
       { path: 'health', method: RequestMethod.GET },
       { path: 'ready', method: RequestMethod.GET },
+      { path: 'metrics', method: RequestMethod.GET },
     ],
   });
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });

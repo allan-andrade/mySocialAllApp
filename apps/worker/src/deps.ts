@@ -2,7 +2,11 @@ import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createTokenCipherFromEnv } from '@social-publisher/crypto';
 import { PrismaClient } from '@social-publisher/database';
-import { createConnectorRegistry, type ConnectorMode } from '@social-publisher/social-connectors';
+import {
+  createConnectorRegistry,
+  liveConfigFromEnv,
+  type ConnectorMode,
+} from '@social-publisher/social-connectors';
 
 import type { ProcessorDeps } from './publication-processor';
 
@@ -10,7 +14,7 @@ export function buildProcessorDeps(env: NodeJS.ProcessEnv = process.env): Proces
   const prisma = new PrismaClient();
   const cipher = createTokenCipherFromEnv(env);
   const mode = (env['SOCIAL_CONNECTOR_MODE'] ?? 'mock') as ConnectorMode;
-  const registry = createConnectorRegistry(mode);
+  const registry = createConnectorRegistry(mode, mode === 'live' ? liveConfigFromEnv(env) : {});
 
   const bucket = env['S3_BUCKET'];
   const s3 = new S3Client({

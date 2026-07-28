@@ -1,0 +1,116 @@
+# Exemplos de requisições (VS Code REST Client / IntelliJ HTTP Client)
+# Pré-requisito: docker compose up -d && pnpm dev
+# O cookie de sessão (sp_session) é definido pelo login e reenviado
+# automaticamente pelos clients que suportam cookie jar.
+
+@api = http://localhost:4000
+@origin = http://localhost:3000
+
+### Health / readiness / métricas
+GET {{api}}/health
+
+###
+GET {{api}}/ready
+
+###
+GET {{api}}/metrics
+
+### Registrar usuário
+POST {{api}}/api/v1/auth/register
+Content-Type: application/json
+Origin: {{origin}}
+
+{ "name": "Allan", "email": "allan@example.com", "password": "supersecret123" }
+
+### Login
+POST {{api}}/api/v1/auth/login
+Content-Type: application/json
+Origin: {{origin}}
+
+{ "email": "allan@example.com", "password": "supersecret123" }
+
+### Usuário atual
+GET {{api}}/api/v1/auth/me
+
+### Listar conexões (inclui o modo mock/live)
+GET {{api}}/api/v1/social-connections
+
+### Iniciar conexão OAuth (mock: redireciona direto ao callback)
+GET {{api}}/api/v1/social-connections/threads/authorize
+
+### Páginas do Facebook de uma conexão
+GET {{api}}/api/v1/social-connections/{{connectionId}}/facebook-pages
+
+### Conectar uma Página
+POST {{api}}/api/v1/social-connections/{{connectionId}}/facebook-pages/mock-fb-page-1/connect
+Origin: {{origin}}
+
+### Criar rascunho
+POST {{api}}/api/v1/drafts
+Content-Type: application/json
+Origin: {{origin}}
+
+{
+  "text": "meu rascunho",
+  "selectedProviders": ["threads", "x"],
+  "providerOverrides": { "x": { "text": "versão curta pro X" } }
+}
+
+### Upload de mídia — passo 1: URL assinada
+POST {{api}}/api/v1/media/presigned-upload
+Content-Type: application/json
+Origin: {{origin}}
+
+{ "filename": "foto.png", "mimeType": "image/png", "sizeBytes": 12345 }
+
+### Upload de mídia — passo 2: PUT direto no storage (fora da API)
+# PUT {uploadUrl da resposta anterior} com Content-Type: image/png e o binário
+
+### Upload de mídia — passo 3: concluir (verifica magic bytes)
+POST {{api}}/api/v1/media/complete
+Content-Type: application/json
+Origin: {{origin}}
+
+{ "mediaAssetId": "{{mediaAssetId}}", "width": 800, "height": 600 }
+
+### Validar conteúdo por plataforma (seção 12)
+POST {{api}}/api/v1/publications/validate
+Content-Type: application/json
+Origin: {{origin}}
+
+{
+  "text": "texto com mais de duzentos e oitenta caracteres ...",
+  "providers": ["x", "threads", "instagram"],
+  "media": [{ "mimeType": "image/jpeg" }]
+}
+
+### Publicar (idempotente por idempotencyKey)
+POST {{api}}/api/v1/publications
+Content-Type: application/json
+Origin: {{origin}}
+
+{
+  "text": "publicando em várias redes 🎉",
+  "providers": ["threads", "x"],
+  "providerOverrides": { "x": { "text": "versão para o X" } },
+  "media": [{ "mediaAssetId": "{{mediaAssetId}}", "altText": "descrição" }],
+  "idempotencyKey": "troque-por-um-uuid"
+}
+
+### Histórico com paginação por cursor e filtros
+GET {{api}}/api/v1/publications?limit=10&status=PARTIALLY_PUBLISHED&provider=x&q=texto
+
+### Detalhe de uma publicação (status por destino)
+GET {{api}}/api/v1/publications/{{publicationId}}
+
+### Retry de todos os destinos com falha
+POST {{api}}/api/v1/publications/{{publicationId}}/retry
+Origin: {{origin}}
+
+### Retry de UM destino
+POST {{api}}/api/v1/publication-targets/{{targetId}}/retry
+Origin: {{origin}}
+
+### Cancelar um destino ainda não processado
+POST {{api}}/api/v1/publication-targets/{{targetId}}/cancel
+Origin: {{origin}}

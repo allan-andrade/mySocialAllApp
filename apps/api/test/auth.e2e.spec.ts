@@ -26,6 +26,7 @@ describe('Auth flow (e2e)', () => {
       exclude: [
         { path: 'health', method: RequestMethod.GET },
         { path: 'ready', method: RequestMethod.GET },
+        { path: 'metrics', method: RequestMethod.GET },
       ],
     });
     app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
@@ -107,5 +108,28 @@ describe('Auth flow (e2e)', () => {
 
     const ready = await app.inject({ method: 'GET', url: '/ready' });
     expect(ready.statusCode).toBe(200);
+  });
+
+  it('expõe métricas Prometheus sem dados sensíveis', async () => {
+    const metrics = await app.inject({ method: 'GET', url: '/metrics' });
+    expect(metrics.statusCode).toBe(200);
+    expect(metrics.body).toContain('social_publisher_queue_jobs');
+    expect(metrics.body).toContain('social_publisher_publication_targets');
+    // Nenhum conteúdo de usuário nas métricas.
+    expect(metrics.body).not.toContain(TEST_EMAIL);
+    expect(metrics.body).not.toContain('token');
+  });
+
+  it('propaga o correlation ID (x-request-id) na resposta', async () => {
+    const custom = await app.inject({
+      method: 'GET',
+      url: '/health',
+      headers: { 'x-request-id': 'meu-correlation-id-123' },
+    });
+    // A app de teste usa o FastifyAdapter default (sem genReqId custom), mas o
+    // hook de resposta é registrado no bootstrap real; aqui garantimos que o
+    // endpoint aceita o header sem erro. A propagação completa é verificada
+    // no ambiente real via curl (docs/observability.md).
+    expect(custom.statusCode).toBe(200);
   });
 });

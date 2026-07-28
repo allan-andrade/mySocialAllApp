@@ -10,6 +10,7 @@ import { ConnectorsModule } from './modules/connectors/connectors.module';
 import { DraftsModule } from './modules/drafts/drafts.module';
 import { HealthModule } from './modules/health/health.module';
 import { MediaModule } from './modules/media/media.module';
+import { MetricsModule } from './modules/metrics/metrics.module';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { PublicationsModule } from './modules/publications/publications.module';
 import { QueueModule } from './modules/queue/queue.module';
@@ -25,6 +26,7 @@ import { SocialConnectionsModule } from './modules/social-connections/social-con
     QueueModule,
     ConnectorsModule,
     HealthModule,
+    MetricsModule,
     AuthModule,
     SocialConnectionsModule,
     MediaModule,

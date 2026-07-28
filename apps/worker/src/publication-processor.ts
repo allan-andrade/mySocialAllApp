@@ -102,7 +102,9 @@ export async function processPublicationTarget(
     }
     // O token só é descriptografado aqui, no worker, imediatamente antes do uso.
     const accessToken = deps.cipher.decrypt(target.socialConnection.encryptedAccessToken);
-    void accessToken; // conectores reais (Fase 5) receberão o token; o mock não precisa dele
+    const refreshToken = target.socialConnection.encryptedRefreshToken
+      ? deps.cipher.decrypt(target.socialConnection.encryptedRefreshToken)
+      : undefined;
 
     // Revalidação final imediatamente antes de chamar a API externa (seção 5).
     const mediaForValidation = target.publication.media.map((item) => ({
@@ -139,6 +141,18 @@ export async function processPublicationTarget(
       externalAccountId: target.socialConnection.externalAccountId,
       accountType: target.socialConnection.accountType ?? undefined,
       status: 'CONNECTED',
+      accessToken,
+      refreshToken,
+      // Facebook: publica na Página selecionada, com o page token dela.
+      page: target.facebookPageConnection
+        ? {
+            pageId: target.facebookPageConnection.pageId,
+            pageName: target.facebookPageConnection.pageName,
+            accessToken: target.facebookPageConnection.encryptedPageAccessToken
+              ? deps.cipher.decrypt(target.facebookPageConnection.encryptedPageAccessToken)
+              : undefined,
+          }
+        : undefined,
     };
 
     // Provedores baseados em container (Instagram/Threads) têm etapa própria.

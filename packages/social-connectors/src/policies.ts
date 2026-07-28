@@ -99,10 +99,12 @@ export const PROVIDER_POLICIES: Record<
       videoSupported: true,
       carouselSupported: true,
       textOnlySupported: true,
+      // Página do Facebook via Graph API: várias fotos num post OU 1 vídeo —
+      // sem misturar vídeo com fotos no mesmo post.
       maxItems: 10,
       maxImages: 10,
-      maxVideos: 10,
-      allowMixedMedia: true,
+      maxVideos: 1,
+      allowMixedMedia: false,
       acceptedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'video/mp4'],
       maxFileSizeBytes: 1024 * MB,
       maxVideoDurationSeconds: 1200,

@@ -199,11 +199,14 @@ export class FakeConnector implements SocialConnector {
         pageId: 'mock-fb-page-1',
         pageName: 'Página Mock Principal',
         pageAvatarUrl: 'https://mock.social/avatars/fb-page-1.png',
+        // Exercita o caminho real de criptografia/uso do page token em modo mock.
+        pageAccessToken: 'mock-page-token-1',
       },
       {
         pageId: 'mock-fb-page-2',
         pageName: 'Página Mock Secundária',
         pageAvatarUrl: 'https://mock.social/avatars/fb-page-2.png',
+        pageAccessToken: 'mock-page-token-2',
       },
     ];
   }
